@@ -2,15 +2,23 @@
 let claudeApiKey = '';
 let chatGptApiKey = '';
 
-// Load API keys on startup
-chrome.storage.local.get(['claudeApiKey', 'chatGptApiKey'], (result) => {
+// Store summaries by video ID
+let summaries = {};
+
+// Track ongoing summarizations
+let ongoingSummarizations = {};
+
+// Load API keys and summaries on startup
+chrome.storage.local.get(['claudeApiKey', 'chatGptApiKey', 'summaries'], (result) => {
   claudeApiKey = result.claudeApiKey || '';
   chatGptApiKey = result.chatGptApiKey || '';
-  console.log('API keys loaded on startup');
+  summaries = result.summaries || {};
+  console.log('API keys and summaries loaded on startup');
 });
 
 // Listen for messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+
   if (request.action === 'summarize') {
     console.log('Background script received summarize request:', {
       service: request.service,
@@ -56,6 +64,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     return true;
   } 
+
+  else if (request.action === 'getGenerationStartTime') {
+    const { videoId } = request;
+    const ongoing = ongoingSummarizations[videoId];
+    
+    sendResponse({ 
+      startTime: ongoing?.startTime || null
+    });
+    return true;
+  }
+
   else if (request.action === 'saveApiKeys') {
     console.log('Background received saveApiKeys request');
     claudeApiKey = request.claudeApiKey;
@@ -82,51 +101,95 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   else if (request.action === 'getApiKeys') {
     console.log('Background received getApiKeys request');
-    // Return cached keys instead of fetching from storage
     sendResponse({
       claudeApiKey,
       chatGptApiKey
     });
     return true;
   }
-});
-
-// Handle streaming connections
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === 'streaming') {
-    console.log('Streaming connection established');
+  else if (request.action === 'getSummary') {
+    // Retrieve summary from storage
+    const { videoId } = request;
+    const summary = summaries[videoId];
+    const ongoing = ongoingSummarizations[videoId];
     
-    port.onMessage.addListener(async (request) => {
-      if (request.action === 'summarizeStream') {
-        const { transcript, videoTitle, channelName, service } = request;
-        
-        console.log('Starting streaming summarization:', service);
-        
-        try {
-          if (service === 'claude') {
-            await summarizeWithClaudeStreaming(transcript, videoTitle, channelName, port);
-          } else if (service === 'chatgpt') {
-            await summarizeWithChatGptStreaming(transcript, videoTitle, channelName, port);
-          }
-        } catch (error) {
-          console.error('Streaming error:', error);
-          port.postMessage({ error: error.message });
-        }
-      }
+    sendResponse({ 
+      summary: summary || null,
+      isGenerating: !!ongoing,
+      progress: ongoing ? ongoing.progress : null
     });
+    return true;
+  }
+  else if (request.action === 'startBackgroundSummarization') {
+    const { transcript, videoTitle, channelName, service, videoId } = request;
+    
+    // Check if already generating
+    if (ongoingSummarizations[videoId]) {
+      sendResponse({ 
+        success: false, 
+        error: 'Already generating summary for this video' 
+      });
+      return true;
+    }
+    
+    // Start background summarization
+    console.log('Starting background summarization:', service, videoId);
+    
+    ongoingSummarizations[videoId] = {
+      service,
+      videoTitle,
+      channelName,
+      startTime: Date.now(),
+      progress: 'Starting...'
+    };
+    
+    if (service === 'claude') {
+      summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoId);
+    } else if (service === 'chatgpt') {
+      summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoId);
+    }
+    
+    sendResponse({ success: true });
+    return true;
+  }
+  // Add this message handler in the onMessage.addListener section:
+
+else if (request.action === 'stopGeneration') {
+    const { videoId } = request;
+    
+    if (ongoingSummarizations[videoId]) {
+      console.log('Stopping generation for video:', videoId);
+      
+      // Mark the summary as stopped (partial)
+      if (summaries[videoId]) {
+        summaries[videoId].isStopped = true;
+        summaries[videoId].isPartial = true;
+        chrome.storage.local.set({ summaries });
+      }
+      
+      // Remove from ongoing
+      delete ongoingSummarizations[videoId];
+      
+      sendResponse({ success: true });
+    } else {
+      sendResponse({ success: false, error: 'No generation in progress for this video' });
+    }
+    
+    return true;
   }
 });
 
-// Function to summarize with Claude API (streaming)
-async function summarizeWithClaudeStreaming(transcript, videoTitle, channelName, port) {
-  console.log('Starting Claude streaming summarization');
+// Background summarization for Claude (no streaming port needed)
+async function summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoId) {
+  console.log('Starting Claude background summarization');
   
   if (!claudeApiKey) {
-    throw new Error('Claude API key not set. Please configure it in Settings.');
+    ongoingSummarizations[videoId].error = 'Claude API key not set';
+    delete ongoingSummarizations[videoId];
+    return;
   }
   
-
-const prompt = `Please provide a thorough, comprehensive summary of this YouTube video transcript.
+  const prompt = `Please provide a thorough, comprehensive summary of this YouTube video transcript.
 
 Video Title: ${videoTitle}
 Channel: ${channelName}
@@ -150,9 +213,9 @@ ${transcript}
 
 Respond with a well-structured, detailed summary that would help someone understand the video content without watching it.`;
 
-  console.log('Sending streaming request to Claude API');
-  
   try {
+    ongoingSummarizations[videoId].progress = 'Contacting Claude API...';
+    
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -171,14 +234,16 @@ Respond with a well-structured, detailed summary that would help someone underst
       })
     });
 
-    console.log('Claude API response status:', response.status);
-    
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Claude API error response:', errorText);
-      throw new Error(`Claude API error (${response.status})`);
+      ongoingSummarizations[videoId].error = `Claude API error (${response.status})`;
+      delete ongoingSummarizations[videoId];
+      return;
     }
 
+    ongoingSummarizations[videoId].progress = 'Generating summary...';
+    
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = '';
@@ -200,9 +265,35 @@ Respond with a well-structured, detailed summary that would help someone underst
             
             if (data.type === 'content_block_delta' && data.delta?.text) {
               fullText += data.delta.text;
-              port.postMessage({ partial: fullText });
+              
+              // Save partial summary
+              summaries[videoId] = {
+                summary: fullText,
+                service: 'claude',
+                videoTitle,
+                channelName,
+                timestamp: Date.now(),
+                isPartial: true
+              };
+              chrome.storage.local.set({ summaries });
+              
+              // Update progress
+              ongoingSummarizations[videoId].progress = `Generating... (${fullText.length} chars)`;
+              
             } else if (data.type === 'message_stop') {
-              port.postMessage({ complete: true, summary: fullText });
+              // Save final summary
+              summaries[videoId] = {
+                summary: fullText,
+                service: 'claude',
+                videoTitle,
+                channelName,
+                timestamp: Date.now(),
+                isPartial: false
+              };
+              chrome.storage.local.set({ summaries });
+              
+              console.log('Claude background summarization completed');
+              delete ongoingSummarizations[videoId];
             }
           } catch (e) {
             // Skip malformed JSON
@@ -211,23 +302,24 @@ Respond with a well-structured, detailed summary that would help someone underst
       }
     }
     
-    console.log('Claude streaming completed');
   } catch (error) {
-    console.error('Claude streaming error:', error);
-    throw error;
+    console.error('Claude background streaming error:', error);
+    ongoingSummarizations[videoId].error = error.message;
+    delete ongoingSummarizations[videoId];
   }
 }
 
-// Function to summarize with ChatGPT API (streaming)
-async function summarizeWithChatGptStreaming(transcript, videoTitle, channelName, port) {
-  console.log('Starting ChatGPT streaming summarization');
+// Background summarization for ChatGPT (no streaming port needed)
+async function summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoId) {
+  console.log('Starting ChatGPT background summarization');
   
   if (!chatGptApiKey) {
-    throw new Error('ChatGPT API key not set. Please configure it in Settings.');
+    ongoingSummarizations[videoId].error = 'ChatGPT API key not set';
+    delete ongoingSummarizations[videoId];
+    return;
   }
   
-  // In summarizeWithClaudeStreaming function:
-const prompt = `Please provide a thorough, comprehensive summary of this YouTube video transcript.
+  const prompt = `Please provide a thorough, comprehensive summary of this YouTube video transcript.
 
 Video Title: ${videoTitle}
 Channel: ${channelName}
@@ -251,9 +343,9 @@ ${transcript}
 
 Respond with a well-structured, detailed summary that would help someone understand the video content without watching it.`;
 
-  console.log('Sending streaming request to ChatGPT API');
-  
   try {
+    ongoingSummarizations[videoId].progress = 'Contacting OpenAI API...';
+    
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -271,14 +363,16 @@ Respond with a well-structured, detailed summary that would help someone underst
       })
     });
 
-    console.log('ChatGPT API response status:', response.status);
-    
     if (!response.ok) {
       const errorText = await response.text();
       console.error('ChatGPT API error response:', errorText);
-      throw new Error(`OpenAI API error (${response.status})`);
+      ongoingSummarizations[videoId].error = `OpenAI API error (${response.status})`;
+      delete ongoingSummarizations[videoId];
+      return;
     }
 
+    ongoingSummarizations[videoId].progress = 'Generating summary...';
+    
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = '';
@@ -294,7 +388,19 @@ Respond with a well-structured, detailed summary that would help someone underst
         if (line.startsWith('data: ')) {
           const jsonStr = line.slice(6);
           if (jsonStr.trim() === '[DONE]') {
-            port.postMessage({ complete: true, summary: fullText });
+            // Save final summary
+            summaries[videoId] = {
+              summary: fullText,
+              service: 'chatgpt',
+              videoTitle,
+              channelName,
+              timestamp: Date.now(),
+              isPartial: false
+            };
+            chrome.storage.local.set({ summaries });
+            
+            console.log('ChatGPT background summarization completed');
+            delete ongoingSummarizations[videoId];
             break;
           }
           
@@ -304,7 +410,20 @@ Respond with a well-structured, detailed summary that would help someone underst
             
             if (content) {
               fullText += content;
-              port.postMessage({ partial: fullText });
+              
+              // Save partial summary
+              summaries[videoId] = {
+                summary: fullText,
+                service: 'chatgpt',
+                videoTitle,
+                channelName,
+                timestamp: Date.now(),
+                isPartial: true
+              };
+              chrome.storage.local.set({ summaries });
+              
+              // Update progress
+              ongoingSummarizations[videoId].progress = `Generating... (${fullText.length} chars)`;
             }
           } catch (e) {
             // Skip malformed JSON
@@ -313,14 +432,14 @@ Respond with a well-structured, detailed summary that would help someone underst
       }
     }
     
-    console.log('ChatGPT streaming completed');
   } catch (error) {
-    console.error('ChatGPT streaming error:', error);
-    throw error;
+    console.error('ChatGPT background streaming error:', error);
+    ongoingSummarizations[videoId].error = error.message;
+    delete ongoingSummarizations[videoId];
   }
 }
 
-// Function to summarize with Claude API (non-streaming fallback)
+// Legacy non-streaming functions remain unchanged
 async function summarizeWithClaude(transcript, videoTitle, channelName) {
   console.log('Starting Claude summarization process');
   
@@ -389,7 +508,6 @@ Respond with a well-structured, detailed summary that would help someone underst
   }
 }
 
-// Function to summarize with ChatGPT API (non-streaming fallback)
 async function summarizeWithChatGpt(transcript, videoTitle, channelName) {
   console.log('Starting ChatGPT summarization process');
   
