@@ -1,3 +1,6 @@
+// Import prompts
+importScripts('prompts.js');
+
 // Store API keys in memory
 let claudeApiKey = '';
 let chatGptApiKey = '';
@@ -121,7 +124,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   else if (request.action === 'startBackgroundSummarization') {
-    const { transcript, videoTitle, channelName, service, videoId } = request;
+    const { transcript, videoTitle, channelName,videoDescription, service, videoId } = request;
     
     // Check if already generating
     if (ongoingSummarizations[videoId]) {
@@ -144,9 +147,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     };
     
     if (service === 'claude') {
-      summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoId);
+      summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoId);
     } else if (service === 'chatgpt') {
-      summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoId);
+      summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoId);
     }
     
     sendResponse({ success: true });
@@ -180,7 +183,7 @@ else if (request.action === 'stopGeneration') {
 });
 
 // Background summarization for Claude (no streaming port needed)
-async function summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoId) {
+async function summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoId) {
   console.log('Starting Claude background summarization');
   
   if (!claudeApiKey) {
@@ -188,30 +191,8 @@ async function summarizeWithClaudeBackground(transcript, videoTitle, channelName
     delete ongoingSummarizations[videoId];
     return;
   }
-  
-  const prompt = `Please provide a thorough, comprehensive summary of this YouTube video transcript.
 
-Video Title: ${videoTitle}
-Channel: ${channelName}
-
-Include the following in your summary:
-1. Main speaker(s) and their roles/expertise
-2. Key points and arguments presented
-3. Important quotes (with approximate timestamps if available)
-4. Any disagreements or opposing viewpoints discussed
-5. Main conclusions or takeaways
-
-Format your response using markdown for better readability:
-- Use **bold** for emphasis on key terms
-- Use clear paragraph breaks
-- Use numbered or bulleted lists where appropriate
-- Use headers (##) for major sections
-- Use > for important quotes
-
-Here's the transcript:
-${transcript}
-
-Respond with a well-structured, detailed summary that would help someone understand the video content without watching it.`;
+  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, transcript);
 
   try {
     ongoingSummarizations[videoId].progress = 'Contacting Claude API...';
@@ -310,7 +291,7 @@ Respond with a well-structured, detailed summary that would help someone underst
 }
 
 // Background summarization for ChatGPT (no streaming port needed)
-async function summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoId) {
+async function summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoId) {
   console.log('Starting ChatGPT background summarization');
   
   if (!chatGptApiKey) {
@@ -318,31 +299,8 @@ async function summarizeWithChatGptBackground(transcript, videoTitle, channelNam
     delete ongoingSummarizations[videoId];
     return;
   }
-  
-  const prompt = `Please provide a thorough, comprehensive summary of this YouTube video transcript.
 
-Video Title: ${videoTitle}
-Channel: ${channelName}
-
-Include the following in your summary:
-1. Main speaker(s) and their roles/expertise
-2. Key points and arguments presented
-3. Important quotes (with approximate timestamps if available)
-4. Any disagreements or opposing viewpoints discussed
-5. Main conclusions or takeaways
-
-Format your response using markdown for better readability:
-- Use **bold** for emphasis on key terms
-- Use clear paragraph breaks
-- Use numbered or bulleted lists where appropriate
-- Use headers (##) for major sections
-- Use > for important quotes
-
-Here's the transcript:
-${transcript}
-
-Respond with a well-structured, detailed summary that would help someone understand the video content without watching it.`;
-
+  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, transcript);
   try {
     ongoingSummarizations[videoId].progress = 'Contacting OpenAI API...';
     
@@ -440,36 +398,14 @@ Respond with a well-structured, detailed summary that would help someone underst
 }
 
 // Legacy non-streaming functions remain unchanged
-async function summarizeWithClaude(transcript, videoTitle, channelName) {
+async function summarizeWithClaude(transcript, videoTitle, channelName, videoDescription) {
   console.log('Starting Claude summarization process');
   
   if (!claudeApiKey) {
     throw new Error('Claude API key not set. Please configure it in Settings.');
   }
-  
-  const prompt = `Please provide a thorough, comprehensive summary of this YouTube video transcript.
 
-Video Title: ${videoTitle}
-Channel: ${channelName}
-
-Include the following in your summary:
-1. Main speaker(s) and their roles/expertise
-2. Key points and arguments presented
-3. Important quotes (with approximate timestamps if available)
-4. Any disagreements or opposing viewpoints discussed
-5. Main conclusions or takeaways
-
-Format your response using markdown for better readability:
-- Use **bold** for emphasis on key terms
-- Use clear paragraph breaks
-- Use numbered or bulleted lists where appropriate
-- Use headers (##) for major sections
-- Use > for important quotes
-
-Here's the transcript:
-${transcript}
-
-Respond with a well-structured, detailed summary that would help someone understand the video content without watching it.`;
+  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, transcript);
 
   console.log('Sending request to Claude API');
   
@@ -508,36 +444,14 @@ Respond with a well-structured, detailed summary that would help someone underst
   }
 }
 
-async function summarizeWithChatGpt(transcript, videoTitle, channelName) {
+async function summarizeWithChatGpt(transcript, videoTitle, channelName, videoDescription) {
   console.log('Starting ChatGPT summarization process');
   
   if (!chatGptApiKey) {
     throw new Error('ChatGPT API key not set. Please configure it in Settings.');
   }
-  
-  const prompt = `Please provide a thorough, comprehensive summary of this YouTube video transcript.
 
-Video Title: ${videoTitle}
-Channel: ${channelName}
-
-Include the following in your summary:
-1. Main speaker(s) and their roles/expertise
-2. Key points and arguments presented
-3. Important quotes (with approximate timestamps if available)
-4. Any disagreements or opposing viewpoints discussed
-5. Main conclusions or takeaways
-
-Format your response using markdown for better readability:
-- Use **bold** for emphasis on key terms
-- Use clear paragraph breaks
-- Use numbered or bulleted lists where appropriate
-- Use headers (##) for major sections
-- Use > for important quotes
-
-Here's the transcript:
-${transcript}
-
-Respond with a well-structured, detailed summary that would help someone understand the video content without watching it.`;
+  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, transcript);
 
   console.log('Sending request to ChatGPT API');
   
