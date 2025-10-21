@@ -99,6 +99,12 @@
       color: white;
       flex: 1;
     }
+    .stop-btn {
+      background-color: #dc3545;
+      color: white;
+      width: 100%;
+      display: none;
+    }
     .settings-btn {
       background-color: #f3f4f6;
       color: #333;
@@ -249,6 +255,14 @@
     .tab-content.active {
       display: block;
     }
+    .generation-status {
+      background: #e3f2fd;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -270,10 +284,18 @@
       <div id="videoInfo" class="video-info">
         <div class="video-title" id="videoTitle">Loading video information...</div>
         <div class="channel-name" id="channelName"></div>
+        
+        <div id="generationStatus" class="generation-status">
+          <strong>🔄 Generation in progress</strong>
+          <div id="generationProgress"></div>
+        </div>
+        
         <div class="action-buttons">
           <button id="claudeBtn" class="claude-btn" disabled>Summarize with Claude</button>
           <button id="chatgptBtn" class="chatgpt-btn" disabled>Summarize with ChatGPT</button>
         </div>
+        
+        <button id="stopBtn" class="stop-btn">⏹ Stop Generation</button>
       </div>
       
       <div id="loading" class="loading">
