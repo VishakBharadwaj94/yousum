@@ -19,66 +19,32 @@ chrome.storage.local.get(['claudeApiKey', 'chatGptApiKey', 'summaries'], (result
   console.log('API keys and summaries loaded on startup');
 });
 
+// Helper function to estimate tokens (rough approximation: 1 token ≈ 4 characters)
+function estimateTokens(text) {
+  return Math.ceil(text.length / 4);
+}
+
+// Helper function to truncate transcript if needed
+function truncateTranscript(transcript, maxTokens) {
+  const estimatedTokens = estimateTokens(transcript);
+  
+  if (estimatedTokens <= maxTokens) {
+    return transcript;
+  }
+  
+  console.log(`Transcript too long (${estimatedTokens} tokens), truncating to ${maxTokens} tokens`);
+  
+  // Calculate how much to keep (with buffer)
+  const keepRatio = (maxTokens * 0.9) / estimatedTokens; // 90% to leave room for prompt
+  const keepChars = Math.floor(transcript.length * keepRatio);
+  
+  const truncated = transcript.substring(0, keepChars);
+  return truncated + '\n\n[Transcript truncated due to length. Summary covers the first portion of the video.]';
+}
+
 // Listen for messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-
-  if (request.action === 'summarize') {
-    console.log('Background script received summarize request:', {
-      service: request.service,
-      videoTitle: request.videoTitle,
-      channelName: request.channelName,
-      transcriptLength: request.transcript ? request.transcript.length : 0
-    });
-    
-    const { transcript, videoTitle, channelName, service } = request;
-    
-    // Check for very long transcripts
-    if (transcript.length > 100000) {
-      console.warn('Transcript is very long:', transcript.length, 'characters');
-      sendResponse({ 
-        error: `Transcript is too long (${transcript.length} characters). This might exceed API limits. Try a shorter video.` 
-      });
-      return true;
-    }
-    
-    if (service === 'claude') {
-      console.log('Starting Claude summarization...');
-      summarizeWithClaude(transcript, videoTitle, channelName)
-        .then(summary => {
-          console.log('Claude summarization successful, summary length:', summary.length);
-          sendResponse({ summary });
-        })
-        .catch(error => {
-          console.error('Claude summarization failed:', error);
-          sendResponse({ error: error.message });
-        });
-    } else if (service === 'chatgpt') {
-      console.log('Starting ChatGPT summarization...');
-      summarizeWithChatGpt(transcript, videoTitle, channelName)
-        .then(summary => {
-          console.log('ChatGPT summarization successful, summary length:', summary.length);
-          sendResponse({ summary });
-        })
-        .catch(error => {
-          console.error('ChatGPT summarization failed:', error);
-          sendResponse({ error: error.message });
-        });
-    }
-    
-    return true;
-  } 
-
-  else if (request.action === 'getGenerationStartTime') {
-    const { videoId } = request;
-    const ongoing = ongoingSummarizations[videoId];
-    
-    sendResponse({ 
-      startTime: ongoing?.startTime || null
-    });
-    return true;
-  }
-
-  else if (request.action === 'saveApiKeys') {
+  if (request.action === 'saveApiKeys') {
     console.log('Background received saveApiKeys request');
     claudeApiKey = request.claudeApiKey;
     chatGptApiKey = request.chatGptApiKey;
@@ -124,7 +90,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   else if (request.action === 'startBackgroundSummarization') {
-    const { transcript, videoTitle, channelName,videoDescription, service, videoId } = request;
+    const { transcript, videoTitle, channelName, videoDescription, videoDuration, service, videoId } = request;
     
     // Check if already generating
     if (ongoingSummarizations[videoId]) {
@@ -135,8 +101,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
     
+    // Check transcript length and warn if very long
+    const transcriptTokens = estimateTokens(transcript);
+    console.log('Transcript size:', transcriptTokens, 'tokens');
+    
+    if (transcriptTokens > 100000) {
+      sendResponse({ 
+        success: false, 
+        error: `Transcript is extremely long (${transcriptTokens} tokens). This video may be too long to summarize. Try a shorter video.` 
+      });
+      return true;
+    }
+    
     // Start background summarization
-    console.log('Starting background summarization:', service, videoId);
+    console.log('Starting background summarization:', service, videoId, `${videoDuration} mins`);
     
     ongoingSummarizations[videoId] = {
       service,
@@ -147,17 +125,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     };
     
     if (service === 'claude') {
-      summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoId);
+      summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, videoId);
     } else if (service === 'chatgpt') {
-      summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoId);
+      summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, videoId);
     }
     
     sendResponse({ success: true });
     return true;
   }
-  // Add this message handler in the onMessage.addListener section:
-
-else if (request.action === 'stopGeneration') {
+  else if (request.action === 'stopGeneration') {
     const { videoId } = request;
     
     if (ongoingSummarizations[videoId]) {
@@ -180,10 +156,19 @@ else if (request.action === 'stopGeneration') {
     
     return true;
   }
+  else if (request.action === 'getGenerationStartTime') {
+    const { videoId } = request;
+    const ongoing = ongoingSummarizations[videoId];
+    
+    sendResponse({ 
+      startTime: ongoing?.startTime || null
+    });
+    return true;
+  }
 });
 
-// Background summarization for Claude (no streaming port needed)
-async function summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoId) {
+// Background summarization for Claude (streaming)
+async function summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, videoId) {
   console.log('Starting Claude background summarization');
   
   if (!claudeApiKey) {
@@ -191,8 +176,12 @@ async function summarizeWithClaudeBackground(transcript, videoTitle, channelName
     delete ongoingSummarizations[videoId];
     return;
   }
-
-  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, transcript);
+  
+  // Claude has higher limits (200k tokens context), but still truncate if needed
+  const maxTranscriptTokens = 180000; // Leave room for prompt and response
+  const processedTranscript = truncateTranscript(transcript, maxTranscriptTokens);
+  
+  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, processedTranscript, videoDuration);
 
   try {
     ongoingSummarizations[videoId].progress = 'Contacting Claude API...';
@@ -207,7 +196,7 @@ async function summarizeWithClaudeBackground(transcript, videoTitle, channelName
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
+        max_tokens: 4096,
         stream: true,
         messages: [
           { role: 'user', content: prompt }
@@ -218,7 +207,32 @@ async function summarizeWithClaudeBackground(transcript, videoTitle, channelName
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Claude API error response:', errorText);
-      ongoingSummarizations[videoId].error = `Claude API error (${response.status})`;
+      
+      // Parse error for better user message
+      let errorMessage = `Claude API error (${response.status})`;
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error?.message) {
+          errorMessage = errorData.error.message;
+        }
+      } catch (e) {
+        // Keep default error message
+      }
+      
+      ongoingSummarizations[videoId].error = errorMessage;
+      
+      // Save error to summaries so user can see it
+      summaries[videoId] = {
+        summary: `Error: ${errorMessage}`,
+        service: 'claude',
+        videoTitle,
+        channelName,
+        timestamp: Date.now(),
+        isPartial: false,
+        hasError: true
+      };
+      chrome.storage.local.set({ summaries });
+      
       delete ongoingSummarizations[videoId];
       return;
     }
@@ -286,12 +300,25 @@ async function summarizeWithClaudeBackground(transcript, videoTitle, channelName
   } catch (error) {
     console.error('Claude background streaming error:', error);
     ongoingSummarizations[videoId].error = error.message;
+    
+    // Save error to summaries
+    summaries[videoId] = {
+      summary: `Error: ${error.message}`,
+      service: 'claude',
+      videoTitle,
+      channelName,
+      timestamp: Date.now(),
+      isPartial: false,
+      hasError: true
+    };
+    chrome.storage.local.set({ summaries });
+    
     delete ongoingSummarizations[videoId];
   }
 }
 
-// Background summarization for ChatGPT (no streaming port needed)
-async function summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoId) {
+// Background summarization for ChatGPT (streaming)
+async function summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, videoId) {
   console.log('Starting ChatGPT background summarization');
   
   if (!chatGptApiKey) {
@@ -299,8 +326,14 @@ async function summarizeWithChatGptBackground(transcript, videoTitle, channelNam
     delete ongoingSummarizations[videoId];
     return;
   }
+  
+  // ChatGPT has 128k context for gpt-4o, but effective is lower due to rate limits
+  // Truncate to ~20k tokens to stay well within rate limits (30k TPM)
+  const maxTranscriptTokens = 20000;
+  const processedTranscript = truncateTranscript(transcript, maxTranscriptTokens);
+  
+  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, processedTranscript, videoDuration);
 
-  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, transcript);
   try {
     ongoingSummarizations[videoId].progress = 'Contacting OpenAI API...';
     
@@ -313,10 +346,10 @@ async function summarizeWithChatGptBackground(transcript, videoTitle, channelNam
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: [
-          { role: 'system', content: 'You are a helpful assistant that summarizes YouTube video transcripts.' },
+          { role: 'system', content: PROMPTS.systemPrompts.chatgpt },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 4000,
+        max_tokens: 4096,
         stream: true
       })
     });
@@ -324,7 +357,37 @@ async function summarizeWithChatGptBackground(transcript, videoTitle, channelNam
     if (!response.ok) {
       const errorText = await response.text();
       console.error('ChatGPT API error response:', errorText);
-      ongoingSummarizations[videoId].error = `OpenAI API error (${response.status})`;
+      
+      // Parse error for better user message
+      let errorMessage = `OpenAI API error (${response.status})`;
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error?.message) {
+          errorMessage = errorData.error.message;
+          
+          // Add helpful message for rate limits
+          if (errorData.error.code === 'rate_limit_exceeded') {
+            errorMessage += '\n\nTip: This video may be too long for your current rate limits. Try using Claude instead, or wait a minute and try again.';
+          }
+        }
+      } catch (e) {
+        // Keep default error message
+      }
+      
+      ongoingSummarizations[videoId].error = errorMessage;
+      
+      // Save error to summaries so user can see it
+      summaries[videoId] = {
+        summary: `Error: ${errorMessage}`,
+        service: 'chatgpt',
+        videoTitle,
+        channelName,
+        timestamp: Date.now(),
+        isPartial: false,
+        hasError: true
+      };
+      chrome.storage.local.set({ summaries });
+      
       delete ongoingSummarizations[videoId];
       return;
     }
@@ -393,98 +456,19 @@ async function summarizeWithChatGptBackground(transcript, videoTitle, channelNam
   } catch (error) {
     console.error('ChatGPT background streaming error:', error);
     ongoingSummarizations[videoId].error = error.message;
+    
+    // Save error to summaries
+    summaries[videoId] = {
+      summary: `Error: ${error.message}`,
+      service: 'chatgpt',
+      videoTitle,
+      channelName,
+      timestamp: Date.now(),
+      isPartial: false,
+      hasError: true
+    };
+    chrome.storage.local.set({ summaries });
+    
     delete ongoingSummarizations[videoId];
-  }
-}
-
-// Legacy non-streaming functions remain unchanged
-async function summarizeWithClaude(transcript, videoTitle, channelName, videoDescription) {
-  console.log('Starting Claude summarization process');
-  
-  if (!claudeApiKey) {
-    throw new Error('Claude API key not set. Please configure it in Settings.');
-  }
-
-  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, transcript);
-
-  console.log('Sending request to Claude API');
-  
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'x-api-key': claudeApiKey,
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        messages: [
-          { role: 'user', content: prompt }
-        ]
-      })
-    });
-
-    console.log('Claude API response status:', response.status);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Claude API error response:', errorText);
-      throw new Error(`Claude API error (${response.status})`);
-    }
-
-    const data = await response.json();
-    console.log('Claude API response received successfully');
-    return data.content[0].text;
-  } catch (error) {
-    console.error('Claude API error details:', error);
-    throw error;
-  }
-}
-
-async function summarizeWithChatGpt(transcript, videoTitle, channelName, videoDescription) {
-  console.log('Starting ChatGPT summarization process');
-  
-  if (!chatGptApiKey) {
-    throw new Error('ChatGPT API key not set. Please configure it in Settings.');
-  }
-
-  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, transcript);
-
-  console.log('Sending request to ChatGPT API');
-  
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${chatGptApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant that summarizes YouTube video transcripts using markdown formatting.' },
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: 4000
-      })
-    });
-
-    console.log('ChatGPT API response status:', response.status);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('ChatGPT API error response:', errorText);
-      throw new Error(`OpenAI API error (${response.status})`);
-    }
-
-    const data = await response.json();
-    console.log('ChatGPT API response received successfully');
-    return data.choices[0].message.content;
-  } catch (error) {
-    console.error('ChatGPT API error details:', error);
-    throw error;
   }
 }
