@@ -3,6 +3,7 @@ let videoId = '';
 let videoTitle = '';
 let channelName = '';
 let videoDescription = '';
+let videoDuration = 0; // in minutes
 let transcript = '';
 
 // Listen for messages from the popup
@@ -13,6 +14,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       videoTitle,
       channelName,
       videoDescription,
+      videoDuration,
       hasTranscript: transcript !== ''
     };
     sendResponse(videoInfo);
@@ -40,7 +42,7 @@ function initialize() {
   
   if (!videoId) return; // Not a video page
   
-  // Get video title, channel name, and description
+  // Get video title, channel name, description, and duration
   const intervalId = setInterval(() => {
     const titleElement = document.querySelector('h1.ytd-video-primary-info-renderer');
     const channelElement = document.querySelector('ytd-channel-name yt-formatted-string#text a');
@@ -50,7 +52,7 @@ function initialize() {
       videoTitle = titleElement.textContent.trim();
       channelName = channelElement.textContent.trim();
       
-      // Get description if available (it might not always be there immediately)
+      // Get description if available
       if (descriptionElement) {
         videoDescription = descriptionElement.textContent.trim();
       } else {
@@ -60,11 +62,26 @@ function initialize() {
           videoDescription = altDescElement.textContent.trim();
         }
       }
+
+      // Get video duration - try multiple methods
+      // Method 1: Try video element
+      const videoElement = document.querySelector('video.html5-main-video');
+      if (videoElement && videoElement.duration && !isNaN(videoElement.duration)) {
+        videoDuration = Math.floor(videoElement.duration / 60); // Convert to minutes
+      } else {
+        // Method 2: Try time display
+        const timeElement = document.querySelector('.ytp-time-duration');
+        if (timeElement) {
+          const timeText = timeElement.textContent.trim();
+          videoDuration = parseTimeToMinutes(timeText);
+        }
+      }
       
       console.log('Video info loaded:', { 
         videoTitle, 
         channelName, 
-        descriptionLength: videoDescription.length 
+        descriptionLength: videoDescription.length,
+        durationMinutes: videoDuration
       });
       
       clearInterval(intervalId);
@@ -72,6 +89,21 @@ function initialize() {
   }, 1000);
   
   // Do NOT preload transcript - wait for user to request it
+}
+
+// Helper function to parse time string (e.g., "1:23:45" or "15:30") to minutes
+function parseTimeToMinutes(timeString) {
+  const parts = timeString.split(':').map(Number);
+  
+  if (parts.length === 3) {
+    // Format: HH:MM:SS
+    return parts[0] * 60 + parts[1];
+  } else if (parts.length === 2) {
+    // Format: MM:SS
+    return parts[0];
+  } else {
+    return 0;
+  }
 }
 
 // Function to extract transcript from YouTube
