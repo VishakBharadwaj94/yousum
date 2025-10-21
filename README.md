@@ -212,12 +212,9 @@ If you encounter any issues or have questions:
 ---
 
 **Disclaimer**: This extension requires valid API keys from Anthropic and/or OpenAI. API usage is subject to their respective terms of service and pricing.
-```
-
-### Additional Files to Create:
 
 **LICENSE** (MIT License example):
-
+```
 MIT License
 
 Copyright (c) 2025 [Vishak Bharadwaj S]
