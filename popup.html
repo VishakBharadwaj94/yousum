@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AI Video Summarizer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      width: 450px;
+      padding: 15px;
+      margin: 0;
+      color: #333;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .title {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 0;
+    }
+    .api-key-section {
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 5px;
+      background-color: #f9f9f9;
+    }
+    .api-key-section h3 {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+    .key-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 8px;
+      border-radius: 4px;
+      background-color: #e8f5e9;
+      font-size: 14px;
+    }
+    .key-status.missing {
+      background-color: #fff3cd;
+    }
+    .key-input-group {
+      margin-bottom: 15px;
+    }
+    .key-input-wrapper {
+      display: flex;
+      gap: 5px;
+    }
+    .video-info {
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .video-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .channel-name {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .claude-btn {
+      background-color: #5a67d8;
+      color: white;
+      flex: 1;
+    }
+    .chatgpt-btn {
+      background-color: #10a37f;
+      color: white;
+      flex: 1;
+    }
+    .settings-btn {
+      background-color: #f3f4f6;
+      color: #333;
+      border: 1px solid #ddd;
+    }
+    .toggle-btn {
+      background-color: #e0e0e0;
+      color: #333;
+      padding: 6px 10px;
+      font-size: 12px;
+      min-width: 60px;
+    }
+    input[type="text"], input[type="password"] {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .save-btn {
+      background-color: #4f46e5;
+      color: white;
+      width: 100%;
+    }
+    .summary-container {
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 15px;
+      max-height: 400px;
+      overflow-y: auto;
+      display: none;
+      background-color: #f9f9f9;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+    
+    /* Markdown rendering styles */
+    .summary-container h1,
+    .summary-container h2,
+    .summary-container h3 {
+      margin-top: 15px;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    
+    .summary-container h1 {
+      font-size: 20px;
+      border-bottom: 2px solid #ddd;
+      padding-bottom: 5px;
+    }
+    
+    .summary-container h2 {
+      font-size: 18px;
+    }
+    
+    .summary-container h3 {
+      font-size: 16px;
+    }
+    
+    .summary-container strong {
+      font-weight: bold;
+      color: #2c3e50;
+    }
+    
+    .summary-container em {
+      font-style: italic;
+    }
+    
+    .summary-container ul,
+    .summary-container ol {
+      margin: 10px 0;
+      padding-left: 25px;
+    }
+    
+    .summary-container li {
+      margin: 5px 0;
+    }
+    
+    .summary-container p {
+      margin: 10px 0;
+    }
+    
+    .summary-container blockquote {
+      border-left: 4px solid #5a67d8;
+      padding-left: 15px;
+      margin: 15px 0;
+      color: #555;
+      font-style: italic;
+    }
+    
+    .summary-container code {
+      background-color: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 20px;
+      font-style: italic;
+      color: #666;
+      display: none;
+    }
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #5a67d8;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .error {
+      color: #e53e3e;
+      margin-top: 10px;
+      display: none;
+      padding: 10px;
+      border: 1px solid #feb2b2;
+      border-radius: 4px;
+      background-color: #fff5f5;
+    }
+    .tabs {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+    .tab {
+      padding: 8px 15px;
+      cursor: pointer;
+      border: 1px solid #ddd;
+      border-radius: 4px 4px 0 0;
+      border-bottom: none;
+      background-color: #f9f9f9;
+    }
+    .tab.active {
+      background-color: white;
+      font-weight: bold;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1 class="title">AI Video Summarizer</h1>
+      <button id="settingsBtn" class="settings-btn">⚙️ Settings</button>
+    </div>
+    
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" data-tab="summary" id="summaryTabButton">Summary</div>
+      <div class="tab" data-tab="settings" id="settingsTabButton">API Settings</div>
+    </div>
+    
+    <!-- Summary Tab -->
+    <div id="summaryTab" class="tab-content active">
+      <div id="videoInfo" class="video-info">
+        <div class="video-title" id="videoTitle">Loading video information...</div>
+        <div class="channel-name" id="channelName"></div>
+        <div class="action-buttons">
+          <button id="claudeBtn" class="claude-btn" disabled>Summarize with Claude</button>
+          <button id="chatgptBtn" class="chatgpt-btn" disabled>Summarize with ChatGPT</button>
+        </div>
+      </div>
+      
+      <div id="loading" class="loading">
+        <div class="loading-spinner"></div>
+        <span id="loadingText">Generating summary...</span>
+      </div>
+      
+      <div id="error" class="error"></div>
+      
+      <div id="summaryContainer" class="summary-container"></div>
+    </div>
+    
+    <!-- Settings Tab -->
+    <div id="settingsTab" class="tab-content">
+      <div class="api-key-section">
+        <h3>API Configuration</h3>
+        
+        <div id="keyStatus" class="key-status missing">
+          <span id="keyStatusText">⚠️ API keys not configured</span>
+        </div>
+        
+        <div class="key-input-group">
+          <label for="claudeApiKey"><strong>Claude API Key:</strong></label>
+          <div class="key-input-wrapper">
+            <input type="password" id="claudeApiKey" placeholder="sk-ant-...">
+            <button id="toggleClaudeKey" class="toggle-btn">Show</button>
+          </div>
+        </div>
+        
+        <div class="key-input-group">
+          <label for="chatgptApiKey"><strong>ChatGPT API Key:</strong></label>
+          <div class="key-input-wrapper">
+            <input type="password" id="chatgptApiKey" placeholder="sk-...">
+            <button id="toggleChatGptKey" class="toggle-btn">Show</button>
+          </div>
+        </div>
+        
+        <button id="saveApiKeysBtn" class="save-btn">Save API Keys</button>
+        <div id="keySaveStatus" style="margin-top: 10px; text-align: center;"></div>
+        
+        <div style="margin-top: 15px; padding: 10px; background-color: #e3f2fd; border-radius: 4px; font-size: 12px;">
+          <strong>📝 Note:</strong> Your API keys are stored locally in your browser and never sent anywhere except to the respective AI services.
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Load marked.js locally -->
+  <script src="marked.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
