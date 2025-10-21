@@ -2,6 +2,7 @@
 let videoId = '';
 let videoTitle = '';
 let channelName = '';
+let videoDescription = '';
 let transcript = '';
 
 // Listen for messages from the popup
@@ -11,6 +12,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       videoId,
       videoTitle,
       channelName,
+      videoDescription,
       hasTranscript: transcript !== ''
     };
     sendResponse(videoInfo);
@@ -38,16 +40,34 @@ function initialize() {
   
   if (!videoId) return; // Not a video page
   
-  // Get video title and channel name
+  // Get video title, channel name, and description
   const intervalId = setInterval(() => {
     const titleElement = document.querySelector('h1.ytd-video-primary-info-renderer');
     const channelElement = document.querySelector('ytd-channel-name yt-formatted-string#text a');
+    const descriptionElement = document.querySelector('ytd-text-inline-expander#description yt-attributed-string span');
     
     if (titleElement && channelElement) {
       videoTitle = titleElement.textContent.trim();
       channelName = channelElement.textContent.trim();
+      
+      // Get description if available (it might not always be there immediately)
+      if (descriptionElement) {
+        videoDescription = descriptionElement.textContent.trim();
+      } else {
+        // Try alternative selectors for description
+        const altDescElement = document.querySelector('#description-inline-expander yt-attributed-string');
+        if (altDescElement) {
+          videoDescription = altDescElement.textContent.trim();
+        }
+      }
+      
+      console.log('Video info loaded:', { 
+        videoTitle, 
+        channelName, 
+        descriptionLength: videoDescription.length 
+      });
+      
       clearInterval(intervalId);
-      console.log('Video info loaded:', { videoTitle, channelName });
     }
   }, 1000);
   
