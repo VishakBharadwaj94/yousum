@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentVideoTitle = '';
   let currentChannelName = '';
   let currentVideoDescription = '';
+  let currentVideoDuration = 0;
   let transcript = '';
   
   // Cached API keys
@@ -148,10 +149,21 @@ document.addEventListener('DOMContentLoaded', function() {
     currentVideoTitle = response.videoTitle;
     currentChannelName = response.channelName;
     currentVideoDescription = response.videoDescription || '';
+    currentVideoDuration = response.videoDuration || 0;
     
     videoTitle.textContent = currentVideoTitle || 'Video title not available';
     channelName.textContent = currentChannelName || 'Channel not available';
     
+  // Show duration if available
+  if (currentVideoDuration > 0) {
+    const hours = Math.floor(currentVideoDuration / 60);
+    const mins = currentVideoDuration % 60;
+    const durationText = hours > 0 
+      ? `${hours}h ${mins}m` 
+      : `${mins}m`;
+    channelName.textContent += ` • ${durationText}`;
+  }
+
     // Check if we have a saved summary or ongoing generation for this video
     chrome.runtime.sendMessage({action: 'getSummary', videoId: currentVideoId}, function(result) {
       if (result && result.isGenerating) {
@@ -284,6 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
       videoTitle: currentVideoTitle,
       channelName: currentChannelName,
       videoDescription: currentVideoDescription,
+      videoDuration: currentVideoDuration,
       service,
       videoId: currentVideoId
     }, function(response) {
