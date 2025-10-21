@@ -1,4 +1,4 @@
-# AI Video Summarizer - Chrome Extension
+# YouSum : AI Video Summarizer - Chrome Extension
 
 A powerful Chrome extension that extracts transcripts from YouTube videos and generates comprehensive summaries using Claude or ChatGPT APIs with real-time streaming support.
 
@@ -19,7 +19,7 @@ A powerful Chrome extension that extracts transcripts from YouTube videos and ge
 
 1. Clone this repository or download as ZIP:
 ```bash
-   git clone https://github.com/VishakBharadwaj94/ai-video-summarizer.git
+   git clone https://github.com/VishakBharadwaj94/yousum.git
 ```
    Or click the green "Code" button and select "Download ZIP", then extract it.
 
@@ -217,7 +217,7 @@ If you encounter any issues or have questions:
 ### Additional Files to Create:
 
 **LICENSE** (MIT License example):
-```
+
 MIT License
 
 Copyright (c) 2025 [Vishak Bharadwaj S]
@@ -240,24 +240,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-
-**.gitignore**:
-```
-# API Keys (if someone accidentally commits them)
-config.json
-*.key
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Test files
-test/
-*.test.js
