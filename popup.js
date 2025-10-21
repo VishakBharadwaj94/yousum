@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentVideoId = '';
   let currentVideoTitle = '';
   let currentChannelName = '';
+  let currentVideoDescription = '';
   let transcript = '';
   
   // Cached API keys
@@ -146,6 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
     currentVideoId = response.videoId;
     currentVideoTitle = response.videoTitle;
     currentChannelName = response.channelName;
+    currentVideoDescription = response.videoDescription || '';
     
     videoTitle.textContent = currentVideoTitle || 'Video title not available';
     channelName.textContent = currentChannelName || 'Channel not available';
@@ -281,6 +283,7 @@ document.addEventListener('DOMContentLoaded', function() {
       transcript,
       videoTitle: currentVideoTitle,
       channelName: currentChannelName,
+      videoDescription: currentVideoDescription,
       service,
       videoId: currentVideoId
     }, function(response) {
