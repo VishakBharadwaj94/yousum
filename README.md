@@ -25,7 +25,7 @@ A powerful Chrome extension that extracts transcripts from YouTube videos and ge
 
 2. Make sure your folder structure looks like this:
 ```
-   ai-video-summarizer/
+   yousum/
    ├── README.md
    ├── background.js
    ├── content.js
@@ -58,7 +58,7 @@ You can use any icon generator or create simple placeholder icons. If you skip t
 1. Open Chrome and navigate to `chrome://extensions/`
 2. Enable **Developer mode** (toggle in the top-right corner)
 3. Click **"Load unpacked"**
-4. Select the `ai-video-summarizer` folder
+4. Select the `yousum` folder
 5. The extension should now appear in your extensions list
 
 ## Configuration
