@@ -41,6 +41,9 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Polling interval ID
   let pollIntervalId = null;
+  
+  // Flag to track if we've loaded the summary
+  let summaryLoaded = false;
 
   // Check if we're on a YouTube video page
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -154,21 +157,40 @@ document.addEventListener('DOMContentLoaded', function() {
     videoTitle.textContent = currentVideoTitle || 'Video title not available';
     channelName.textContent = currentChannelName || 'Channel not available';
     
-  // Show duration if available
-  if (currentVideoDuration > 0) {
-    const hours = Math.floor(currentVideoDuration / 60);
-    const mins = currentVideoDuration % 60;
-    const durationText = hours > 0 
-      ? `${hours}h ${mins}m` 
-      : `${mins}m`;
-    channelName.textContent += ` • ${durationText}`;
+    // Show duration if available
+    if (currentVideoDuration > 0) {
+      const hours = Math.floor(currentVideoDuration / 60);
+      const mins = currentVideoDuration % 60;
+      const durationText = hours > 0 
+        ? `${hours}h ${mins}m` 
+        : `${mins}m`;
+      channelName.textContent += ` • ${durationText}`;
+    }
+    
+    // Load summary with retry logic
+    loadSummaryWithRetry();
+    
+    // Update button state
+    updateButtonState();
   }
 
+  function loadSummaryWithRetry(retryCount = 0) {
+    const maxRetries = 3;
+    const retryDelay = 300; // ms
+    
     // Check if we have a saved summary or ongoing generation for this video
     chrome.runtime.sendMessage({action: 'getSummary', videoId: currentVideoId}, function(result) {
+      if (!result && retryCount < maxRetries) {
+        // No result yet, retry after a short delay
+        console.log(`Retry ${retryCount + 1}: Loading summary...`);
+        setTimeout(() => loadSummaryWithRetry(retryCount + 1), retryDelay);
+        return;
+      }
+      
       if (result && result.isGenerating) {
         // Generation is ongoing!
         console.log('Generation in progress for this video');
+        summaryLoaded = true;
         showGenerationInProgress(result);
         
         // Start polling to show live updates
@@ -176,12 +198,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
       } else if (result && result.summary) {
         console.log('Found existing summary for this video');
+        summaryLoaded = true;
         displaySavedSummary(result.summary);
+      } else {
+        // No summary found after all retries
+        console.log('No summary found for this video');
+        summaryLoaded = true;
       }
     });
-    
-    // Update button state
-    updateButtonState();
   }
 
   function showGenerationInProgress(result) {
@@ -200,12 +224,6 @@ document.addEventListener('DOMContentLoaded', function() {
       summaryContainer.innerHTML = htmlContent;
       summaryContainer.style.display = 'block';
     }
-    
-    // Get the actual start time from the ongoing summarization
-    chrome.runtime.sendMessage({action: 'getGenerationStartTime', videoId: currentVideoId}, function(response) {
-      const actualStartTime = response?.startTime || Date.now();
-      startPolling(result.summary?.service || 'claude', actualStartTime);
-    });
   }
 
   function displaySavedSummary(savedSummary) {
@@ -213,8 +231,13 @@ document.addEventListener('DOMContentLoaded', function() {
     summaryContainer.innerHTML = htmlContent;
     summaryContainer.style.display = 'block';
     
-    // Show a note if partial or stopped
-    if (savedSummary.isPartial || savedSummary.isStopped) {
+    // Show a note if partial, stopped, or has error
+    if (savedSummary.hasError) {
+      const note = document.createElement('div');
+      note.style.cssText = 'background: #fff5f5; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 13px; border: 1px solid #feb2b2;';
+      note.innerHTML = '<strong>❌ Error occurred during generation</strong>';
+      summaryContainer.insertBefore(note, summaryContainer.firstChild);
+    } else if (savedSummary.isPartial || savedSummary.isStopped) {
       const note = document.createElement('div');
       note.style.cssText = 'background: #fff3cd; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 13px;';
       note.textContent = savedSummary.isStopped 
@@ -315,9 +338,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function startPolling(service, startTime) {
     if (!startTime) {
-      startTime = Date.now();
+      // Try to get the actual start time from background
+      chrome.runtime.sendMessage({action: 'getGenerationStartTime', videoId: currentVideoId}, function(response) {
+        const actualStartTime = response?.startTime || Date.now();
+        startPollingWithTime(service, actualStartTime);
+      });
+    } else {
+      startPollingWithTime(service, startTime);
     }
-    
+  }
+
+  function startPollingWithTime(service, startTime) {
     let lastScrollHeight = 0;
     let userHasScrolledUp = false;
     
@@ -375,6 +406,9 @@ document.addEventListener('DOMContentLoaded', function() {
           summaryContainer.innerHTML = htmlContent;
           summaryContainer.style.display = 'block';
           
+          // Show error/partial notes if needed
+          displaySavedSummary(result.summary);
+          
           console.log(`${service} summarization completed in ${elapsed}s`);
           resetToSummarizeButtons();
         }
@@ -417,7 +451,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const note = document.createElement('div');
         note.style.cssText = 'background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; font-size: 13px;';
         note.textContent = '⏹ Generation stopped. Partial summary saved.';
-        summaryContainer.insertBefore(note, summaryContainer.firstChild);
+        
+        if (summaryContainer.firstChild) {
+          summaryContainer.insertBefore(note, summaryContainer.firstChild);
+        } else {
+          summaryContainer.appendChild(note);
+          summaryContainer.style.display = 'block';
+        }
         
         resetToSummarizeButtons();
       } else {
@@ -538,7 +578,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function togglePasswordVisibility(input, button) {
-  if (input.type === 'password') {
+    if (input.type === 'password') {
       input.type = 'text';
       button.textContent = 'Hide';
     } else {
