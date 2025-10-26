@@ -327,6 +327,21 @@ Potential future features:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Security & Privacy
+
+**API Key Storage:**
+- Your API keys are stored locally on your computer using Chrome's storage API
+- Keys are encrypted by Chrome using your operating system's encryption (Windows DPAPI, macOS Keychain)
+- Keys are never sent to any third-party servers
+- Keys are only transmitted directly to Anthropic/OpenAI APIs for summarization
+- No tracking, analytics, or data collection
+
+**Recommendations:**
+- Use API keys with spending limits
+- Monitor your API usage regularly
+- If sharing your computer, consider using a separate Chrome profile
+- To clear keys: Go to Settings tab and delete them, or uninstall the extension
+
 ## Acknowledgments
 
 - [Anthropic](https://www.anthropic.com/) for Claude API
@@ -348,5 +363,7 @@ GitHub: https://github.com/vishakbharadwaj94/yousum
 ---
 
 **Disclaimer**: This extension requires valid API keys from Anthropic and/or OpenAI. API usage is subject to their respective terms of service and pricing. This extension is not affiliated with, endorsed by, or connected to YouTube, Google, Anthropic, or OpenAI.
+
+
 
 **Made with ❤️ for the AI community**
