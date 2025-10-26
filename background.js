@@ -1,23 +1,29 @@
 // Import prompts
 importScripts('prompts.js');
 
-// Store API keys in memory
-let claudeApiKey = '';
-let chatGptApiKey = '';
-
 // Store summaries by video ID
 let summaries = {};
 
 // Track ongoing summarizations
 let ongoingSummarizations = {};
 
-// Load API keys and summaries on startup
-chrome.storage.local.get(['claudeApiKey', 'chatGptApiKey', 'summaries'], (result) => {
-  claudeApiKey = result.claudeApiKey || '';
-  chatGptApiKey = result.chatGptApiKey || '';
+// Load summaries on startup (but NOT API keys - we'll read those fresh each time)
+chrome.storage.local.get(['summaries'], (result) => {
   summaries = result.summaries || {};
-  console.log('API keys and summaries loaded on startup');
+  console.log('Summaries loaded on startup');
 });
+
+// Helper function to get API keys from storage
+async function getApiKeys() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['claudeApiKey', 'chatGptApiKey'], (result) => {
+      resolve({
+        claudeApiKey: result.claudeApiKey || '',
+        chatGptApiKey: result.chatGptApiKey || ''
+      });
+    });
+  });
+}
 
 // Helper function to estimate tokens (rough approximation: 1 token ≈ 4 characters)
 function estimateTokens(text) {
@@ -46,8 +52,6 @@ function truncateTranscript(transcript, maxTokens) {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'saveApiKeys') {
     console.log('Background received saveApiKeys request');
-    claudeApiKey = request.claudeApiKey;
-    chatGptApiKey = request.chatGptApiKey;
     
     // Save to storage
     chrome.storage.local.set({
@@ -61,7 +65,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           error: chrome.runtime.lastError.message 
         });
       } else {
-        console.log('Keys saved successfully');
+        console.log('Keys saved successfully to storage');
         sendResponse({ success: true });
       }
     });
@@ -70,10 +74,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   else if (request.action === 'getApiKeys') {
     console.log('Background received getApiKeys request');
-    sendResponse({
-      claudeApiKey,
-      chatGptApiKey
+    
+    // Always read fresh from storage
+    chrome.storage.local.get(['claudeApiKey', 'chatGptApiKey'], (result) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error retrieving keys:', chrome.runtime.lastError);
+        sendResponse({ 
+          claudeApiKey: '',
+          chatGptApiKey: '',
+          error: chrome.runtime.lastError.message 
+        });
+      } else {
+        console.log('Keys retrieved from storage:', {
+          hasClaudeKey: !!result.claudeApiKey,
+          hasChatGptKey: !!result.chatGptApiKey
+        });
+        sendResponse({
+          claudeApiKey: result.claudeApiKey || '',
+          chatGptApiKey: result.chatGptApiKey || ''
+        });
+      }
     });
+    
     return true;
   }
   else if (request.action === 'getSummary') {
@@ -171,8 +193,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 async function summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, videoId) {
   console.log('Starting Claude background summarization');
   
+  // Get API key fresh from storage
+  const keys = await getApiKeys();
+  const claudeApiKey = keys.claudeApiKey;
+  
   if (!claudeApiKey) {
-    ongoingSummarizations[videoId].error = 'Claude API key not set';
+    const errorMsg = 'Claude API key not set. Please configure it in Settings.';
+    console.error(errorMsg);
+    ongoingSummarizations[videoId].error = errorMsg;
+    
+    summaries[videoId] = {
+      summary: `Error: ${errorMsg}`,
+      service: 'claude',
+      videoTitle,
+      channelName,
+      timestamp: Date.now(),
+      isPartial: false,
+      hasError: true
+    };
+    chrome.storage.local.set({ summaries });
+    
     delete ongoingSummarizations[videoId];
     return;
   }
@@ -321,8 +361,26 @@ async function summarizeWithClaudeBackground(transcript, videoTitle, channelName
 async function summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, videoId) {
   console.log('Starting ChatGPT background summarization');
   
+  // Get API key fresh from storage
+  const keys = await getApiKeys();
+  const chatGptApiKey = keys.chatGptApiKey;
+  
   if (!chatGptApiKey) {
-    ongoingSummarizations[videoId].error = 'ChatGPT API key not set';
+    const errorMsg = 'ChatGPT API key not set. Please configure it in Settings.';
+    console.error(errorMsg);
+    ongoingSummarizations[videoId].error = errorMsg;
+    
+    summaries[videoId] = {
+      summary: `Error: ${errorMsg}`,
+      service: 'chatgpt',
+      videoTitle,
+      channelName,
+      timestamp: Date.now(),
+      isPartial: false,
+      hasError: true
+    };
+    chrome.storage.local.set({ summaries });
+    
     delete ongoingSummarizations[videoId];
     return;
   }
