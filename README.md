@@ -2,7 +2,7 @@
 
 A powerful Chrome extension that extracts transcripts from YouTube videos and generates comprehensive summaries using Claude or ChatGPT APIs with real-time streaming support. Summaries persist across sessions and generation continues even when the popup is closed.
 
-![Extension Version](https://img.shields.io/badge/version-1.2-blue)
+![Extension Version](https://img.shields.io/badge/version-1.3-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Features
@@ -11,25 +11,27 @@ A powerful Chrome extension that extracts transcripts from YouTube videos and ge
 - 🔄 **Background Generation**: Close the popup and generation continues in the background
 - 💾 **Persistent Summaries**: All summaries are saved and reload when you revisit videos
 - 🎯 **Dual AI Support**: Choose between Claude (Anthropic) or ChatGPT (OpenAI)
+- 📊 **5 Summary Detail Levels**: Choose from Skim (150-300 words) to Exhaustive (3500-4500 words)
 - ⏹️ **Stop Generation**: Cancel generation at any time and save partial results
 - 📝 **Rich Formatting**: Summaries rendered with proper markdown (headers, bold, lists, quotes)
 - ⚡ **Smart Transcript Extraction**: Automatically extracts YouTube captions with fallback methods
-- 🔐 **Secure Storage**: API keys stored locally in your browser
-- 🎨 **Clean UI**: Simple, intuitive interface with live progress indicators
+- 🔒 **Secure Storage**: API keys stored locally in your browser
+- 🎨 **Larger Reading Area**: Expanded UI (550px wide, 600px tall) for comfortable reading
 - 📊 **Smart Scrolling**: Auto-scroll stops when you scroll up to read earlier content
+- ✅ **Better Error Handling**: Clear informational messages for videos without captions
 
 ## Installation
 
 ### Step 1: Download the Extension
 
 1. Clone this repository or download as ZIP:
-```bash
+\`\`\`bash
    git clone https://github.com/vishakbharadwaj94/yousum.git
-```
+\`\`\`
    Or click the green "Code" button and select "Download ZIP", then extract it.
 
 2. Make sure your folder structure looks like this:
-```
+\`\`\`
    yousum/
    ├── README.md
    ├── background.js
@@ -37,33 +39,34 @@ A powerful Chrome extension that extracts transcripts from YouTube videos and ge
    ├── manifest.json
    ├── popup.html
    ├── popup.js
+   ├── prompts.js
    ├── marked.min.js
    └── icons/
        ├── icon16.png
        └── icon48.png
-```
+\`\`\`
 
 ### Step 2: Download marked.min.js
 
 The extension needs the Marked.js library for markdown rendering:
 
-1. Download `marked.min.js` from: https://cdn.jsdelivr.net/npm/marked/marked.min.js
-2. Save it in the root folder of the extension (same level as `manifest.json`)
+1. Download \`marked.min.js\` from: https://cdn.jsdelivr.net/npm/marked/marked.min.js
+2. Save it in the root folder of the extension (same level as \`manifest.json\`)
 
 ### Step 3: Create Icons (Optional)
 
 If you want custom icons, create two PNG files:
-- `icons/icon16.png` (16x16 pixels)
-- `icons/icon48.png` (48x48 pixels)
+- \`icons/icon16.png\` (16x16 pixels)
+- \`icons/icon48.png\` (48x48 pixels)
 
 You can use any icon generator or create simple placeholder icons. If you skip this step, Chrome will use a default icon.
 
 ### Step 4: Load Extension in Chrome
 
-1. Open Chrome and navigate to `chrome://extensions/`
+1. Open Chrome and navigate to \`chrome://extensions/\`
 2. Enable **Developer mode** (toggle in the top-right corner)
 3. Click **"Load unpacked"**
-4. Select the `yousum` folder
+4. Select the \`yousum\` folder
 5. The extension should now appear in your extensions list
 
 ## Configuration
@@ -77,14 +80,14 @@ You'll need API keys from one or both AI services:
 2. Sign up or log in
 3. Navigate to API Keys section
 4. Create a new API key
-5. Copy the key (starts with `sk-ant-...`)
+5. Copy the key (starts with \`sk-ant-...\`)
 
 #### For ChatGPT (OpenAI):
 1. Go to https://platform.openai.com/
 2. Sign up or log in
 3. Navigate to API Keys section
 4. Create a new API key
-5. Copy the key (starts with `sk-...`)
+5. Copy the key (starts with \`sk-...\`)
 
 ### Configure the Extension
 
@@ -101,17 +104,23 @@ You'll need API keys from one or both AI services:
 
 ### Summarizing a Video
 
-1. Navigate to any YouTube video (e.g., `https://www.youtube.com/watch?v=VIDEO_ID`)
+1. Navigate to any YouTube video (e.g., \`https://www.youtube.com/watch?v=VIDEO_ID\`)
 2. Click the extension icon in your Chrome toolbar
 3. The extension will automatically detect the video (even on already-open tabs)
-4. Click either:
+4. Select your preferred **Summary Detail Level** from the dropdown:
+   - ⚡ **Skim** (150-300 words) - Ultra-brief overview
+   - 📄 **Summary** (400-1000 words) - Concise key points
+   - ⚖️ **Balanced** (800-2000 words) - Balanced detail (default)
+   - 📚 **Comprehensive** (1500-3500 words) - Thorough coverage
+   - 🔍 **Exhaustive** (3500-4500 words) - Complete analysis
+5. Click either:
    - **"Summarize with Claude"** - Uses Anthropic's Claude AI
    - **"Summarize with ChatGPT"** - Uses OpenAI's GPT-4
 
 ### What Happens Next
 
 1. **Transcript Extraction** (3-5 seconds): The extension extracts the video's captions
-2. **Streaming Summary** (10-30 seconds): The AI generates a summary in real-time
+2. **Streaming Summary** (10-60 seconds depending on length): The AI generates a summary in real-time
    - You'll see the summary appear word-by-word
    - A timer shows elapsed time
    - You can scroll up to read earlier parts while it continues generating
@@ -147,6 +156,7 @@ Each summary includes:
 - 💬 **Important quotes** with timestamps
 - ⚖️ **Disagreements** or opposing viewpoints
 - ✅ **Main conclusions** and takeaways
+- 📖 **Chronological chapters** (for longer videos)
 
 ## Tips & Troubleshooting
 
@@ -163,17 +173,19 @@ Each summary includes:
 - Make sure you're on a video page (not the YouTube homepage)
 
 **"Could not extract transcript"**
-- Make sure the video has captions available
-- Try clicking the "Show transcript" button on YouTube first to verify
-- Some videos may have captions disabled by the creator
+- This is **not an error** - it simply means the video doesn't have captions available
+- Some videos have captions disabled by the creator
+- Try clicking the "Show transcript" button on YouTube to verify caption availability
+- The extension cannot summarize videos without transcripts
 
 **"API key not set"**
 - Go to Settings tab and enter your API key
 - Make sure you clicked "Save API Keys"
-- Check that the key starts with `sk-ant-` (Claude) or `sk-` (OpenAI)
+- Check that the key starts with \`sk-ant-\` (Claude) or \`sk-\` (OpenAI)
 
 **Summary takes too long**
-- Longer videos naturally take more time (20-45+ seconds)
+- Longer videos naturally take more time (20-60+ seconds)
+- Exhaustive summaries take longer than Skim summaries
 - Check your internet connection
 - Verify you haven't exceeded your API rate limits
 - Generation continues in the background - close popup and check back later
@@ -184,15 +196,10 @@ Each summary includes:
 - Check if you've hit API rate limits or quota
 - Partial summaries are saved - you can see what was generated
 
-**Scrolling fights with auto-scroll during generation**
-- This should be fixed in v1.2+
-- Scroll up manually and auto-scroll will stop
-- Auto-scroll only activates when you're at the bottom
-
-**Timer resets when reopening popup**
-- This should be fixed in v1.2+
-- Timer now shows total elapsed time from original start
-- Close and reopen the popup - timer should continue counting
+**"Polling timed out"**
+- This timeout is set to 3 minutes
+- For very long videos with exhaustive summaries, close the popup and check back later
+- Generation continues in the background even after timeout
 
 ### API Costs
 
@@ -200,13 +207,13 @@ Both services charge per API usage:
 - **Claude (Sonnet 4)**: ~$3 per million input tokens, ~$15 per million output tokens
 - **ChatGPT (GPT-4o)**: ~$2.50 per million input tokens, ~$10 per million output tokens
 
-**Typical costs per video:**
+**Typical costs per video (Balanced summary):**
 - 10-minute video: $0.02 - $0.08
 - 30-minute video: $0.05 - $0.20
 - 60-minute video: $0.10 - $0.40
 - 2-hour video: $0.30 - $1.00
 
-Costs vary based on transcript length and summary detail.
+Costs vary based on transcript length and summary detail level. Exhaustive summaries cost more than Skim summaries.
 
 ## Privacy & Security
 
@@ -218,6 +225,18 @@ Costs vary based on transcript length and summary detail.
 - 🔒 No external servers - everything runs locally in your browser
 
 ## Advanced Features
+
+### Summary Detail Levels
+
+The extension offers 5 detail levels with adaptive formatting:
+
+1. **Skim** (150-300 words) - Quick overview, no chapters
+2. **Summary** (400-1000 words) - Key points, chapters for 30+ min videos
+3. **Balanced** (800-2000 words) - Good detail, chapters for 20+ min videos
+4. **Comprehensive** (1500-3500 words) - Extensive detail, chapters for 15+ min videos
+5. **Exhaustive** (3500-4500 words) - Complete analysis, always includes chapters
+
+For longer videos (60+ minutes), comprehensive and exhaustive summaries include detailed chronological chapters with timestamps.
 
 ### Persistent Storage
 - All summaries are saved indefinitely in Chrome's local storage
@@ -240,15 +259,16 @@ Costs vary based on transcript length and summary detail.
 ## Development
 
 ### Project Structure
-```
+\`\`\`
 ├── manifest.json       # Extension configuration (Manifest V3)
 ├── background.js       # Service worker handling API calls and storage
 ├── content.js          # Script injected into YouTube pages
 ├── popup.html          # Extension popup UI
 ├── popup.js            # Popup logic and event handlers
+├── prompts.js          # Centralized prompt templates
 ├── marked.min.js       # Markdown parser library
 └── icons/              # Extension icons
-```
+\`\`\`
 
 ### Tech Stack
 
@@ -268,8 +288,8 @@ Costs vary based on transcript length and summary detail.
 - Survives popup closure
 
 **content.js** (Content Script)
-- Extracts video metadata (title, channel, video ID)
-- Extracts YouTube transcripts using two methods
+- Extracts video metadata (title, channel, video ID, duration)
+- Extracts YouTube transcripts using multiple fallback methods
 - Injected on YouTube video pages
 
 **popup.js** (UI Logic)
@@ -278,14 +298,19 @@ Costs vary based on transcript length and summary detail.
 - Handles scrolling behavior and user input
 - Auto-injects content script if needed
 
+**prompts.js** (Prompt Templates)
+- Centralized prompt management for both AI services
+- Adaptive prompts based on video duration and summary style
+- Configurable summary detail levels
+
 ### Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
+2. Create your feature branch (\`git checkout -b feature/AmazingFeature\`)
+3. Commit your changes (\`git commit -m 'Add some AmazingFeature'\`)
+4. Push to the branch (\`git push origin feature/AmazingFeature\`)
 5. Open a Pull Request
 
 ### Roadmap
@@ -294,15 +319,26 @@ Potential future features:
 - [ ] Export summaries to PDF/Markdown files
 - [ ] Custom summary templates/prompts
 - [ ] Summary comparison (different AI services)
-- [ ] Timestamp-linked navigation
+- [ ] Timestamp-linked navigation to video
 - [ ] Batch processing multiple videos
 - [ ] Summary sharing/collaboration
 - [ ] Browser sync for summaries across devices
-- [ ] Support for other video platforms
+- [ ] Support for other video platforms (Vimeo, etc.)
+- [ ] Summary regeneration with different detail levels
 
 ## Changelog
 
-### Version 1.2 (Current)
+### Version 1.3 (Current)
+- ✨ Added 5 summary detail levels (Skim to Exhaustive)
+- ✨ Increased UI size for better readability (550px wide, 600px tall summary area)
+- ✨ Adaptive prompt system based on video duration and style
+- ✨ Better error handling - "no transcript" treated as info, not error
+- ✨ Increased polling timeout to 3 minutes for longer videos
+- ✨ Improved logging with console.info for non-error conditions
+- 🛠️ Added prompts.js for centralized prompt management
+- 📖 Updated README with comprehensive documentation
+
+### Version 1.2
 - ✨ Added background generation (continues when popup is closed)
 - ✨ Added stop generation button
 - ✨ Added persistent summary storage
@@ -310,13 +346,13 @@ Potential future features:
 - ✨ Fixed scrolling issues during generation
 - ✨ Auto-inject content script on already-open tabs
 - ✨ Smart retry logic for content script injection
-- 🐛 Bug fixes and performance improvements
+- 🛠️ Bug fixes and performance improvements
 
 ### Version 1.1
 - ✨ Added real-time streaming support
 - ✨ Added markdown rendering
 - ✨ Improved API key management UI
-- 🐛 Fixed CORS issues with Claude API
+- 🛠️ Fixed CORS issues with Claude API
 
 ### Version 1.0
 - 🎉 Initial release
