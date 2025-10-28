@@ -112,7 +112,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   else if (request.action === 'startBackgroundSummarization') {
-    const { transcript, videoTitle, channelName, videoDescription, videoDuration, service, videoId } = request;
+    const { transcript, videoTitle, channelName, videoDescription, videoDuration, summaryStyle, service, videoId } = request;
     
     // Check if already generating
     if (ongoingSummarizations[videoId]) {
@@ -147,9 +147,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     };
     
     if (service === 'claude') {
-      summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, videoId);
+      summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, summaryStyle, videoId);
     } else if (service === 'chatgpt') {
-      summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, videoId);
+      summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, summaryStyle, videoId);
     }
     
     sendResponse({ success: true });
@@ -190,7 +190,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // Background summarization for Claude (streaming)
-async function summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, videoId) {
+async function summarizeWithClaudeBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, summaryStyle, videoId) {
   console.log('Starting Claude background summarization');
   
   // Get API key fresh from storage
@@ -221,7 +221,7 @@ async function summarizeWithClaudeBackground(transcript, videoTitle, channelName
   const maxTranscriptTokens = 180000; // Leave room for prompt and response
   const processedTranscript = truncateTranscript(transcript, maxTranscriptTokens);
   
-  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, processedTranscript, videoDuration);
+  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, processedTranscript, videoDuration, summaryStyle || 'balanced');
 
   try {
     ongoingSummarizations[videoId].progress = 'Contacting Claude API...';
@@ -358,7 +358,7 @@ async function summarizeWithClaudeBackground(transcript, videoTitle, channelName
 }
 
 // Background summarization for ChatGPT (streaming)
-async function summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, videoId) {
+async function summarizeWithChatGptBackground(transcript, videoTitle, channelName, videoDescription, videoDuration, summaryStyle, videoId) {
   console.log('Starting ChatGPT background summarization');
   
   // Get API key fresh from storage
@@ -390,7 +390,7 @@ async function summarizeWithChatGptBackground(transcript, videoTitle, channelNam
   const maxTranscriptTokens = 20000;
   const processedTranscript = truncateTranscript(transcript, maxTranscriptTokens);
   
-  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, processedTranscript, videoDuration);
+  const prompt = PROMPTS.videoSummary(videoTitle, channelName, videoDescription, processedTranscript, videoDuration, summaryStyle || 'balanced');
 
   try {
     ongoingSummarizations[videoId].progress = 'Contacting OpenAI API...';
