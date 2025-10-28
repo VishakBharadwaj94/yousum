@@ -115,11 +115,12 @@ async function extractTranscript() {
     tryDescriptionTranscriptButton()
       .then(result => resolve(result))
       .catch(error => {
-        console.log('Description transcript button method failed, trying alternative methods:', error.message);
+        console.info('Description transcript button method failed, trying alternative methods:', error.message);
         tryMoreActionsMethod()
           .then(result => resolve(result))
           .catch(error => {
-            console.log('More actions method failed too:', error.message);
+            console.info('More actions method failed too:', error.message);
+            console.info('No captions/transcript available for this video');
             reject(new Error('Could not extract transcript. This video may not have captions available.'));
           });
       });
