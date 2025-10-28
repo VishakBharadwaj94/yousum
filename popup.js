@@ -26,6 +26,34 @@ document.addEventListener('DOMContentLoaded', function() {
   const settingsTabButton = document.getElementById('settingsTabButton');
   const generationStatus = document.getElementById('generationStatus');
   const generationProgress = document.getElementById('generationProgress');
+  const summaryStyleSelect = document.getElementById('summaryStyle');
+  const styleDescription = document.getElementById('styleDescription');
+
+  const styleDescriptions = {
+    skim: 'Ultra-brief overview - just the core message',
+    summary: 'Concise summary hitting the key points',
+    balanced: 'Balanced detail with good coverage of key points',
+    comprehensive: 'Thorough coverage with extensive detail',
+    exhaustive: 'Complete in-depth analysis of everything'
+  };
+
+  // Load saved style preference
+  chrome.storage.local.get(['summaryStyle'], function(result) {
+    if (result.summaryStyle) {
+      selectedSummaryStyle = result.summaryStyle;
+      summaryStyleSelect.value = result.summaryStyle;
+      styleDescription.textContent = styleDescriptions[result.summaryStyle];
+    }
+  });
+
+  summaryStyleSelect.addEventListener('change', function() {
+    selectedSummaryStyle = this.value;
+    styleDescription.textContent = styleDescriptions[this.value];
+    
+    // Save preference
+    chrome.storage.local.set({ summaryStyle: this.value });
+    console.log('Summary style changed to:', this.value);
+  });
 
   // Variables to store data
   let currentVideoId = '';
@@ -34,6 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentVideoDescription = '';
   let currentVideoDuration = 0;
   let transcript = '';
+  let selectedSummaryStyle = 'balanced';
   
   // Cached API keys
   let cachedClaudeKey = '';
@@ -297,44 +326,45 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  function startSummarization(service) {
-    // Show loading state
-    loadingText.textContent = 'Starting summarization...';
-    loading.style.display = 'block';
-    
-    // Hide summarize buttons, show stop button
-    claudeBtn.style.display = 'none';
-    chatgptBtn.style.display = 'none';
-    stopBtn.style.display = 'block';
-    generationStatus.style.display = 'block';
-    
-    console.log(`Starting ${service} background summarization`);
-    
-    const startTime = Date.now();
-    
-    // Start background summarization
-    chrome.runtime.sendMessage({
-      action: 'startBackgroundSummarization',
-      transcript,
-      videoTitle: currentVideoTitle,
-      channelName: currentChannelName,
-      videoDescription: currentVideoDescription,
-      videoDuration: currentVideoDuration,
-      service,
-      videoId: currentVideoId
-    }, function(response) {
-      if (response && response.success) {
-        console.log('Background summarization started');
-        
-        // Start polling for updates with the actual start time
-        startPolling(service, startTime);
-      } else {
-        loading.style.display = 'none';
-        showError(response?.error || 'Failed to start summarization');
-        resetToSummarizeButtons();
-      }
-    });
-  }
+function startSummarization(service) {
+  // Show loading state
+  loadingText.textContent = 'Starting summarization...';
+  loading.style.display = 'block';
+  
+  // Hide summarize buttons, show stop button
+  claudeBtn.style.display = 'none';
+  chatgptBtn.style.display = 'none';
+  stopBtn.style.display = 'block';
+  generationStatus.style.display = 'block';
+  
+  console.log(`Starting ${service} background summarization with style: ${selectedSummaryStyle}`);
+  
+  const startTime = Date.now();
+  
+  // Start background summarization
+  chrome.runtime.sendMessage({
+    action: 'startBackgroundSummarization',
+    transcript,
+    videoTitle: currentVideoTitle,
+    channelName: currentChannelName,
+    videoDescription: currentVideoDescription,
+    videoDuration: currentVideoDuration,
+    summaryStyle: selectedSummaryStyle, // Add this line
+    service,
+    videoId: currentVideoId
+  }, function(response) {
+    if (response && response.success) {
+      console.log('Background summarization started');
+      
+      // Start polling for updates with the actual start time
+      startPolling(service, startTime);
+    } else {
+      loading.style.display = 'none';
+      showError(response?.error || 'Failed to start summarization');
+      resetToSummarizeButtons();
+    }
+  });
+}
 
   function startPolling(service, startTime) {
     if (!startTime) {

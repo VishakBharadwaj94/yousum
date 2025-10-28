@@ -6,7 +6,7 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      width: 450px;
+      width: 550px;
       padding: 15px;
       margin: 0;
       color: #333;
@@ -132,7 +132,7 @@
       border: 1px solid #ddd;
       border-radius: 5px;
       padding: 15px;
-      max-height: 400px;
+      max-height: 600px;
       overflow-y: auto;
       display: none;
       background-color: #f9f9f9;
@@ -263,6 +263,44 @@
       font-size: 13px;
       display: none;
     }
+
+        .summary-style-selector {
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border-radius: 4px;
+      border: 1px solid #e0e0e0;
+    }
+    
+    .summary-style-selector label {
+      display: block;
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #555;
+    }
+    
+    .summary-style-selector select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: white;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    
+    .summary-style-selector select:focus {
+      outline: none;
+      border-color: #5a67d8;
+    }
+    
+    .style-description {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #666;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -284,6 +322,20 @@
       <div id="videoInfo" class="video-info">
         <div class="video-title" id="videoTitle">Loading video information...</div>
         <div class="channel-name" id="channelName"></div>
+        
+        <div class="summary-style-selector">
+          <label for="summaryStyle">Summary Detail Level:</label>
+          <select id="summaryStyle">
+            <option value="skim">⚡ Skim (150-300 words)</option>
+            <option value="summary">📄 Summary (400-1000 words)</option>
+            <option value="balanced" selected>⚖️ Balanced (800-2000 words)</option>
+            <option value="comprehensive">📚 Comprehensive (1500-3500 words)</option>
+            <option value="exhaustive">🔍 Exhaustive (3500-4500 words)</option>
+          </select>
+          <div class="style-description" id="styleDescription">
+            Balanced detail with good coverage of key points
+          </div>
+        </div>
         
         <div id="generationStatus" class="generation-status">
           <strong>🔄 Generation in progress</strong>
