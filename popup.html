@@ -60,6 +60,18 @@
       border: 1px solid #ddd;
       padding: 10px;
       border-radius: 5px;
+      background: white;
+      transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+      max-height: 500px;
+      overflow: hidden;
+    }
+
+    .video-info.collapsed {
+      max-height: 0;
+      padding: 0 10px;
+      opacity: 0;
+      margin-bottom: 0;
+      border: none;
     }
     .video-title {
       font-weight: bold;
@@ -140,6 +152,9 @@
       font-size: 14px;
     }
     
+    .summary-container.expanded {
+      max-height: 650px;
+    }
     /* Markdown rendering styles */
     .summary-container h1,
     .summary-container h2,

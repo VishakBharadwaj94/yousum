@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const generationProgress = document.getElementById('generationProgress');
   const summaryStyleSelect = document.getElementById('summaryStyle');
   const styleDescription = document.getElementById('styleDescription');
-
+  const videoInfo = document.getElementById('videoInfo');
   const styleDescriptions = {
     skim: 'Ultra-brief overview - just the core message',
     summary: 'Concise summary hitting the key points',
@@ -37,6 +37,24 @@ document.addEventListener('DOMContentLoaded', function() {
     exhaustive: 'Complete in-depth analysis of everything'
   };
 
+  // Auto-collapse video info when scrolling in summary
+  let lastScrollTop = 0;
+  summaryContainer.addEventListener('scroll', function() {
+    const scrollTop = summaryContainer.scrollTop;
+    
+    if (scrollTop > 50 && scrollTop > lastScrollTop) {
+      // Scrolling down and past 50px
+      videoInfo.classList.add('collapsed');
+      summaryContainer.classList.add('expanded');
+    } else if (scrollTop < 10) {
+      // Back at the top
+      videoInfo.classList.remove('collapsed');
+      summaryContainer.classList.remove('expanded');
+    }
+    
+    lastScrollTop = scrollTop;
+  });
+  
   // Load saved style preference
   chrome.storage.local.get(['summaryStyle'], function(result) {
     if (result.summaryStyle) {
@@ -290,8 +308,11 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Transcript extracted successfully, length:', transcript.length);
             resolve(transcript);
           } else if (response && response.error) {
+            // Don't treat "no captions" as an error - it's just informational
+            console.info('Could not get transcript:', response.error);
             reject(new Error(`Could not get transcript: ${response.error}`));
           } else {
+            console.info('No transcript available for this video');
             reject(new Error('Could not get transcript. Please make sure captions are available for this video.'));
           }
         });
@@ -455,7 +476,7 @@ function startSummarization(service) {
         showError('Polling timed out. Generation may still be running in the background.');
         resetToSummarizeButtons();
       }
-    }, 90000);
+    }, 180000);
   }
 
   function stopGeneration() {
