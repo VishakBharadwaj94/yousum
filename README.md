@@ -16,9 +16,7 @@ A powerful Chrome extension that extracts transcripts from YouTube videos and ge
 - 📝 **Rich Formatting**: Summaries rendered with proper markdown (headers, bold, lists, quotes)
 - ⚡ **Smart Transcript Extraction**: Automatically extracts YouTube captions with fallback methods
 - 🔒 **Secure Storage**: API keys stored locally in your browser
-- 🎨 **Larger Reading Area**: Expanded UI (550px wide, 600px tall) for comfortable reading
 - 📊 **Smart Scrolling**: Auto-scroll stops when you scroll up to read earlier content
-- ✅ **Better Error Handling**: Clear informational messages for videos without captions
 
 ## Installation
 
